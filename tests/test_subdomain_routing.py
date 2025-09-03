@@ -918,7 +918,7 @@ class TestSubdomainEdgeCases:
     """Test edge cases and error handling for subdomain routing."""
 
     def test_unknown_subdomain_handling(self, docker_client, clients_dir):
-        """Test that unknown subdomains return 404."""
+        """Test that unknown subdomains return 500."""
         helper = SubdomainTestHelper()
 
         client1_container = "syftbox-client-client1-syftbox-net"
@@ -937,12 +937,13 @@ class TestSubdomainEdgeCases:
 
         assert response["success"]
 
-        # Unknown subdomains should return 404
-        assert response["status_code"] == 200, (
-            f"Expected 200 for unknown subdomain, got {response['status_code']}"
+        # Unknown subdomains should return 500
+        assert response["status_code"] == 500, (
+            f"Expected 500 for unknown subdomain, got {response['status_code']}"
         )
-        assert re.search(r"SyftBox \S+ .+ go\S+ .+ .+", response["content"]), (
-            "Expected main page content not found"
+        # Should return an error page saying the subdomain is not available
+        assert "not available or has not been configured" in response["content"], (
+            f"Expected error message not found in response: {response['content']}"
         )
 
         print("✅ Unknown subdomain handling test passed!")
