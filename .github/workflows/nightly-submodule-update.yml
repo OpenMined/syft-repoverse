@@ -66,21 +66,10 @@ jobs:
           git checkout -b $BRANCH_NAME
           git push origin $BRANCH_NAME
 
-  # Run integration tests on the update branch
-  run-tests:
+  # Merge to main first (to get upstream fixes)
+  merge-updates:
     needs: update-submodules
     if: needs.update-submodules.outputs.changes == 'true'
-    uses: ./.github/workflows/integration-tests.yml
-    with:
-      ref: ${{ needs.update-submodules.outputs.branch_name }}
-    permissions:
-      contents: read
-      actions: read
-      
-  # Merge to main if tests pass
-  merge-updates:
-    needs: [update-submodules, run-tests]
-    if: needs.update-submodules.outputs.changes == 'true' && needs.run-tests.result == 'success'
     runs-on: ubuntu-latest
     
     permissions:
@@ -109,9 +98,20 @@ jobs:
         run: |
           git push origin --delete ${{ needs.update-submodules.outputs.branch_name }}
   
+  # Run integration tests after merging
+  run-tests:
+    needs: [update-submodules, merge-updates]
+    if: needs.update-submodules.outputs.changes == 'true'
+    uses: ./.github/workflows/integration-tests.yml
+    with:
+      ref: main
+    permissions:
+      contents: read
+      actions: read
+  
   # Create summary and handle failures
   summary:
-    needs: [update-submodules, run-tests, merge-updates]
+    needs: [update-submodules, merge-updates, run-tests]
     if: always()
     runs-on: ubuntu-latest
     
@@ -130,32 +130,55 @@ jobs:
             echo "### Status:" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             
-            if [[ "${{ needs.run-tests.result }}" == "success" && "${{ needs.merge-updates.result }}" == "success" ]]; then
-              echo "✅ **Tests passed** - Submodules updated successfully" >> $GITHUB_STEP_SUMMARY
-            elif [[ "${{ needs.run-tests.result }}" == "failure" ]]; then
-              echo "❌ **Tests failed** - Submodule updates NOT merged" >> $GITHUB_STEP_SUMMARY
+            if [[ "${{ needs.merge-updates.result }}" == "success" ]]; then
+              echo "✅ **Submodules updated** - Upstream changes merged to main" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
-              echo "⚠️ **Note:** The submodule updates were not merged due to test failures. Please review the test results and fix any issues." >> $GITHUB_STEP_SUMMARY
+              
+              if [[ "${{ needs.run-tests.result }}" == "success" ]]; then
+                echo "✅ **Tests passed** - Everything is working correctly" >> $GITHUB_STEP_SUMMARY
+              elif [[ "${{ needs.run-tests.result }}" == "failure" ]]; then
+                echo "⚠️ **Tests failed** - Upstream changes merged but tests are failing" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+                echo "**Action Required:** The submodule updates have been merged to get upstream fixes, but integration tests are now failing. Please review and fix compatibility issues." >> $GITHUB_STEP_SUMMARY
+              fi
             else
-              echo "❌ **Workflow failed** - Please check the workflow logs" >> $GITHUB_STEP_SUMMARY
+              echo "❌ **Merge failed** - Could not merge submodule updates" >> $GITHUB_STEP_SUMMARY
             fi
           else
             echo "ℹ️ **Status:** No updates needed - all submodules are up to date" >> $GITHUB_STEP_SUMMARY
           fi
       
-      - name: Handle failure
-        if: needs.run-tests.result == 'failure' || needs.merge-updates.result == 'failure'
+      - name: Handle test failure
+        if: needs.run-tests.result == 'failure'
         uses: actions/github-script@v7
         with:
           script: |
-            const testsFailed = '${{ needs.run-tests.result }}' === 'failure';
-            const title = testsFailed 
-              ? `Nightly Submodule Update - Tests Failed - ${new Date().toISOString().split('T')[0]}`
-              : `Nightly Submodule Update Failed - ${new Date().toISOString().split('T')[0]}`;
+            const title = `Nightly Submodule Update - Tests Failing After Merge - ${new Date().toISOString().split('T')[0]}`;
             
-            const body = testsFailed
-              ? `The nightly submodule update found changes but tests failed.\n\n⚠️ **Submodule updates were NOT merged due to test failures.**\n\nWorkflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nPlease review the test failures and fix any compatibility issues with the updated submodules.`
-              : `The nightly submodule update workflow failed.\n\nWorkflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nPlease investigate and fix the issue.`;
+            const body = `The nightly submodule updates have been merged to main, but integration tests are now failing.\n\n⚠️ **Important:** The upstream changes have been merged to ensure we receive critical fixes and updates. However, there are compatibility issues that need to be addressed.\n\nWorkflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\n**Action Required:**\n1. Review the test failures\n2. Fix compatibility issues with the updated submodules\n3. Push fixes to main\n\nThis approach ensures we don't miss important upstream fixes while still alerting about integration issues.`;
+            
+            const issue = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['automated', 'bug', 'high-priority']
+            };
+            
+            try {
+              await github.rest.issues.create(issue);
+            } catch (error) {
+              console.error('Failed to create issue:', error);
+            }
+      
+      - name: Handle merge failure
+        if: needs.merge-updates.result == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `Nightly Submodule Update - Merge Failed - ${new Date().toISOString().split('T')[0]}`;
+            
+            const body = `The nightly submodule update workflow failed to merge changes.\n\nWorkflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nPlease investigate and fix the merge issue manually.`;
             
             const issue = {
               owner: context.repo.owner,
