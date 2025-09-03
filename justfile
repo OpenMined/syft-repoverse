@@ -127,7 +127,7 @@ fix-permissions:
 test:
     @echo "Running integration tests..."
     @echo "Activating virtual environment and running tests..."
-    bash -c "source .venv/bin/activate && python -m pytest tests/ -v -s"
+    bash -c "uv run python -m pytest tests/ -v -s"
 
 # Install test dependencies
 install-deps:
@@ -140,7 +140,7 @@ test-full: clean start-all
     @echo "Waiting for services to stabilize..."
     @sleep 10
     @echo "Running tests..."
-    -bash -c "source .venv/bin/activate && python -m pytest tests/ -v"
+    -bash -c "uv run python -m pytest tests/ -v"
     @just clean
 
 # Show logs for debugging
