@@ -127,7 +127,7 @@ fix-permissions:
 test:
     @echo "Running integration tests..."
     @echo "Activating virtual environment and running tests..."
-    bash -c "source .venv/bin/activate && python -m pytest tests/ -v"
+    bash -c "source .venv/bin/activate && python -m pytest tests/ -v -s"
 
 # Install test dependencies
 install-deps:
