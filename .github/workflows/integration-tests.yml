@@ -91,10 +91,9 @@ jobs:
 
     - name: Setup tmate session for debugging
       uses: mxschmitt/action-tmate@v3
-      if: ${{ github.event_name == 'workflow_dispatch' }}
       with:
         limit-access-to-actor: true
-        detached: true
+        detached: false
 
     - name: Run integration tests
       run: |
@@ -110,12 +109,6 @@ jobs:
         path: |
           pytest-report.html
           .pytest_cache/
-
-    - name: Setup tmate session on failure
-      if: ${{ failure() && github.event_name == 'workflow_dispatch' }}
-      uses: mxschmitt/action-tmate@v3
-      with:
-        limit-access-to-actor: true
 
     - name: Collect logs on failure
       if: failure()
