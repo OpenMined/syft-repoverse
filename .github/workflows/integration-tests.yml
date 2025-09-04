@@ -89,6 +89,13 @@ jobs:
       run: |
         just fix-permissions
 
+    - name: Setup tmate session for debugging
+      uses: mxschmitt/action-tmate@v3
+      if: ${{ github.event_name == 'workflow_dispatch' }}
+      with:
+        limit-access-to-actor: true
+        detached: true
+
     - name: Run integration tests
       run: |
         just test
@@ -104,6 +111,12 @@ jobs:
           pytest-report.html
           .pytest_cache/
 
+    - name: Setup tmate session on failure
+      if: ${{ failure() && github.event_name == 'workflow_dispatch' }}
+      uses: mxschmitt/action-tmate@v3
+      with:
+        limit-access-to-actor: true
+
     - name: Collect logs on failure
       if: failure()
       run: |
@@ -117,6 +130,9 @@ jobs:
         docker ps -a
         echo "=== Test Client Directories ==="
         ls -la clients/ || true
+        echo "=== Server Access Logs (if available) ==="
+        docker exec syftbox-server ls -la /app/.logs/ 2>/dev/null || true
+        docker exec syftbox-server head -20 /app/.logs/*.log 2>/dev/null || true
 
     - name: Cleanup
       if: always()
