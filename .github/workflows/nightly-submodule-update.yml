@@ -9,15 +9,15 @@ on:
 jobs:
   update-submodules:
     runs-on: ubuntu-latest
-    
+
     permissions:
       contents: write
       actions: read
-    
+
     outputs:
       changes: ${{ steps.check_changes.outputs.changes }}
       branch_name: ${{ steps.create_branch.outputs.branch_name }}
-      
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,79 +25,97 @@ jobs:
           submodules: recursive
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
-      
+          clean: true
+
       - name: Configure Git
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-      
-      - name: Update all submodules to latest
+
+      - name: Update all submodules to latest (ff-only) and sync nested submodules
+        shell: bash
         run: |
-          echo "Updating all submodules to their latest main branch..."
-          git submodule update --init --recursive
-          git submodule foreach --recursive 'git checkout main || git checkout master'
-          git submodule foreach --recursive 'git pull origin main || git pull origin master'
-      
-      - name: Check for changes
+          set -euo pipefail
+
+          echo "Ensure clean submodules at recorded commits"
+          git submodule update --init --recursive --checkout
+
+          echo "Fast-forward each submodule to its remote default branch, no local edits"
+          git submodule foreach --recursive '
+            set -e
+            git reset --hard
+            git clean -fdx
+            (git checkout main || git checkout master)
+            (git pull --ff-only origin main || git pull --ff-only origin master)
+            # Bring nested submodules (e.g., syftbox-ui/src-daemon) to the commit this submodule now expects
+            git submodule update --init --recursive --checkout
+          '
+
+      - name: Stage only submodule gitlink bumps
         id: check_changes
+        shell: bash
         run: |
-          if [[ -n $(git status --porcelain) ]]; then
-            echo "changes=true" >> $GITHUB_OUTPUT
-            echo "Submodule changes detected"
-            git status --porcelain
-          else
-            echo "changes=false" >> $GITHUB_OUTPUT
+          set -euo pipefail
+
+          # List submodule paths explicitly (safer than `git add .`)
+          SUBS=("apps/llm-router" "apps/rds" "sdks/python" "syftbox" "syftbox-flower" "syftbox-ui")
+          git add "${SUBS[@]}"
+
+          if git diff --cached --quiet; then
             echo "No submodule changes detected"
+            echo "changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Submodule changes detected:"
+            git diff --cached --submodule
+            echo "changes=true" >> "$GITHUB_OUTPUT"
           fi
-      
-      # Create a branch and push changes if there are any
-      - name: Create update branch
+
+      - name: Create update branch and push
         if: steps.check_changes.outputs.changes == 'true'
         id: create_branch
+        shell: bash
         run: |
+          set -euo pipefail
           BRANCH_NAME="nightly-update-$(date +'%Y%m%d-%H%M%S')"
-          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-          
-          # Stage and commit changes
-          git add .
+          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+
+          git switch -c "$BRANCH_NAME"
           git commit -m "chore: update submodules to latest [$(date +'%Y-%m-%d')]"
-          
-          # Create and push branch
-          git checkout -b $BRANCH_NAME
-          git push origin $BRANCH_NAME
+          git push origin "$BRANCH_NAME"
 
   # Merge to main first (to get upstream fixes)
   merge-updates:
     needs: update-submodules
     if: needs.update-submodules.outputs.changes == 'true'
     runs-on: ubuntu-latest
-    
+
     permissions:
       contents: write
-      
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
-          
+
       - name: Configure Git
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-      
+
       - name: Merge update branch to main
         run: |
           git checkout main
           git pull origin main
+          git fetch origin ${{ needs.update-submodules.outputs.branch_name }}
           git merge origin/${{ needs.update-submodules.outputs.branch_name }} --no-ff -m "Merge nightly submodule updates"
           git push origin main
-          
+
       - name: Delete update branch
         run: |
           git push origin --delete ${{ needs.update-submodules.outputs.branch_name }}
-  
+
   # Run integration tests after merging
   run-tests:
     needs: [update-submodules, merge-updates]
@@ -108,16 +126,16 @@ jobs:
     permissions:
       contents: read
       actions: read
-  
+
   # Create summary and handle failures
   summary:
     needs: [update-submodules, merge-updates, run-tests]
     if: always()
     runs-on: ubuntu-latest
-    
+
     permissions:
       issues: write
-      
+
     steps:
       - name: Create summary
         run: |
@@ -125,15 +143,15 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Date:** $(date +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           if [[ "${{ needs.update-submodules.outputs.changes }}" == "true" ]]; then
             echo "### Status:" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            
+
             if [[ "${{ needs.merge-updates.result }}" == "success" ]]; then
               echo "✅ **Submodules updated** - Upstream changes merged to main" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
-              
+
               if [[ "${{ needs.run-tests.result }}" == "success" ]]; then
                 echo "✅ **Tests passed** - Everything is working correctly" >> $GITHUB_STEP_SUMMARY
               elif [[ "${{ needs.run-tests.result }}" == "failure" ]]; then
@@ -147,16 +165,14 @@ jobs:
           else
             echo "ℹ️ **Status:** No updates needed - all submodules are up to date" >> $GITHUB_STEP_SUMMARY
           fi
-      
+
       - name: Handle test failure
         if: needs.run-tests.result == 'failure'
         uses: actions/github-script@v7
         with:
           script: |
             const title = `Nightly Submodule Update - Tests Failing After Merge - ${new Date().toISOString().split('T')[0]}`;
-            
             const body = `The nightly submodule updates have been merged to main, but integration tests are now failing.\n\n⚠️ **Important:** The upstream changes have been merged to ensure we receive critical fixes and updates. However, there are compatibility issues that need to be addressed.\n\nWorkflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\n**Action Required:**\n1. Review the test failures\n2. Fix compatibility issues with the updated submodules\n3. Push fixes to main\n\nThis approach ensures we don't miss important upstream fixes while still alerting about integration issues.`;
-            
             const issue = {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -164,22 +180,15 @@ jobs:
               body: body,
               labels: ['automated', 'bug', 'high-priority']
             };
-            
-            try {
-              await github.rest.issues.create(issue);
-            } catch (error) {
-              console.error('Failed to create issue:', error);
-            }
-      
+            try { await github.rest.issues.create(issue); } catch (error) { console.error('Failed to create issue:', error); }
+
       - name: Handle merge failure
         if: needs.merge-updates.result == 'failure'
         uses: actions/github-script@v7
         with:
           script: |
             const title = `Nightly Submodule Update - Merge Failed - ${new Date().toISOString().split('T')[0]}`;
-            
             const body = `The nightly submodule update workflow failed to merge changes.\n\nWorkflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nPlease investigate and fix the merge issue manually.`;
-            
             const issue = {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -187,9 +196,4 @@ jobs:
               body: body,
               labels: ['automated', 'bug']
             };
-            
-            try {
-              await github.rest.issues.create(issue);
-            } catch (error) {
-              console.error('Failed to create issue:', error);
-            }
+            try { await github.rest.issues.create(issue); } catch (error) { console.error('Failed to create issue:', error); }
