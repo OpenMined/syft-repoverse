@@ -24,9 +24,9 @@ class AccessLoggingTestHelper:
     @staticmethod
     def get_server_logs_path() -> Path:
         """Get the path to the server's logs directory."""
-        # The logs are created next to the binary in the container
-        # We need to copy them from the container to inspect them
-        return Path("/app") / AccessLoggingTestHelper.LOGS_DIR
+        # Based on the Dockerfile, the binary is at /root/server
+        # so logs are created at /root/.logs/
+        return Path("/root") / AccessLoggingTestHelper.LOGS_DIR
 
     @staticmethod
     def copy_logs_from_container(container_name: str, dest_path: Path) -> bool:
@@ -35,13 +35,20 @@ class AccessLoggingTestHelper:
             # Create destination directory
             dest_path.mkdir(parents=True, exist_ok=True)
             
-            # Copy logs from container
+            # Copy logs from container - the server binary is at /root/server
+            # so logs should be at /root/.logs/
             cmd = [
                 "docker", "cp",
-                f"{container_name}:/app/{AccessLoggingTestHelper.LOGS_DIR}/.",
+                f"{container_name}:/root/{AccessLoggingTestHelper.LOGS_DIR}/.",
                 str(dest_path)
             ]
             result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"Failed to copy logs: {result.stderr}")
+                # Try to see what's in the container
+                ls_cmd = ["docker", "exec", container_name, "ls", "-la", "/root/"]
+                ls_result = subprocess.run(ls_cmd, capture_output=True, text=True)
+                print(f"Contents of /root/: {ls_result.stdout}")
             return result.returncode == 0
         except Exception as e:
             print(f"Failed to copy logs: {e}")
@@ -119,56 +126,61 @@ class TestAccessLogging:
     ):
         """Test that access logs are created for each user email that contacts the server."""
         
-        # Start the server
-        print("Starting server...")
-        subprocess.run(["just", "test-server"], check=True)
+        # The containers are already running from 'just start-all' in GitHub Actions
+        # We just need to verify they're up and make requests
         
-        # Wait for server to be ready
-        assert wait_for_container_log("syftbox-server", "Server started", timeout=30)
-        time.sleep(2)  # Give server extra time to fully initialize
+        print("Checking that server is running...")
+        server_status = get_container_status(docker_client, "syftbox-server")
+        assert server_status["running"], "Server container is not running"
         
-        # Start multiple clients with different emails
-        clients = [
-            (AccessLoggingTestHelper.CLIENT1_EMAIL, "client1"),
-            (AccessLoggingTestHelper.CLIENT2_EMAIL, "client2"),
-            (AccessLoggingTestHelper.CLIENT3_EMAIL, "client3"),
-        ]
+        # The existing clients should already be running
+        # client1@syftbox.net and client2@syftbox.net are the default test clients
+        client1_status = get_container_status(docker_client, "syftbox-client-client1-syftbox-net")
+        client2_status = get_container_status(docker_client, "syftbox-client-client2-syftbox-net")
         
-        for email, client_name in clients:
-            print(f"Starting {client_name} with email {email}...")
-            env_vars = {
-                "SYFTBOX_EMAIL": email,
-                "SYFTBOX_SERVER": AccessLoggingTestHelper.SERVER_URL,
-                "SYFTBOX_SYNC_DIR": f"/tmp/test_sync_{client_name}"
-            }
-            
-            # Start client container
-            subprocess.run(
-                ["just", f"test-client-{client_name[-1]}"],  # test-client-1, test-client-2, etc.
-                env=dict(os.environ, **env_vars),
-                check=True
-            )
-            
-            # Wait for client to authenticate
-            assert wait_for_container_log(
-                f"syftbox-{client_name}",
-                "Authenticated",
-                timeout=30
-            )
-            time.sleep(1)
+        assert client1_status["running"], "Client1 container is not running"
+        assert client2_status["running"], "Client2 container is not running"
         
-        # Give time for all access attempts to be logged
-        time.sleep(3)
+        # Make some API requests to generate log entries
+        emails = ["client1@syftbox.net", "client2@syftbox.net"]
+        
+        for email in emails:
+            print(f"Making API requests for {email}...")
+            # Try various endpoints to generate log entries
+            for i in range(3):
+                try:
+                    # These requests may fail but should still generate log entries
+                    requests.get(
+                        f"{AccessLoggingTestHelper.SERVER_URL}/api/files/test_{i}.txt",
+                        headers={"X-User-Email": email},
+                        timeout=2
+                    )
+                except:
+                    pass  # We don't care if the request fails, just that it generates a log
+                
+                try:
+                    requests.post(
+                        f"{AccessLoggingTestHelper.SERVER_URL}/api/sync",
+                        headers={"X-User-Email": email},
+                        json={"path": f"/{email}/test.txt"},
+                        timeout=2
+                    )
+                except:
+                    pass
+        
+        # Give time for logs to be written
+        time.sleep(2)
         
         # Copy logs from server container to local filesystem
         print("Copying logs from server container...")
+        # The logs should be in /root/.logs/ based on the Dockerfile
         assert access_logging_helper.copy_logs_from_container(
             "syftbox-server",
             temp_logs_dir
         )
         
         # Verify log files exist for each user
-        for email, client_name in clients:
+        for email in emails:
             log_file = temp_logs_dir / f"{email}.log"
             print(f"Checking for log file: {log_file}")
             
@@ -183,10 +195,8 @@ class TestAccessLogging:
             assert len(user_entries) > 0, f"No entries with user={email}"
             
             print(f"Found {len(entries)} log entries for {email}")
-            print(f"First entry: {json.dumps(entries[0], indent=2)}")
-        
-        # Cleanup
-        subprocess.run(["just", "test-cleanup"], check=False)
+            if entries:
+                print(f"First entry: {json.dumps(entries[0], indent=2)}")
 
     def test_log_entry_format_and_content(
         self,
@@ -196,32 +206,15 @@ class TestAccessLogging:
     ):
         """Test that log entries contain expected fields and format."""
         
-        # Start server
-        print("Starting server...")
-        subprocess.run(["just", "test-server"], check=True)
-        assert wait_for_container_log("syftbox-server", "Server started", timeout=30)
-        time.sleep(2)
+        # Containers are already running
+        print("Checking that server is running...")
+        server_status = get_container_status(docker_client, "syftbox-server")
+        assert server_status["running"], "Server container is not running"
         
-        # Start a client
         email = AccessLoggingTestHelper.CLIENT1_EMAIL
-        env_vars = {
-            "SYFTBOX_EMAIL": email,
-            "SYFTBOX_SERVER": AccessLoggingTestHelper.SERVER_URL,
-            "SYFTBOX_SYNC_DIR": "/tmp/test_sync_client1"
-        }
-        
-        print(f"Starting client with email {email}...")
-        subprocess.run(
-            ["just", "test-client-1"],
-            env=dict(os.environ, **env_vars),
-            check=True
-        )
-        
-        # Wait for authentication
-        assert wait_for_container_log("syftbox-client1", "Authenticated", timeout=30)
         
         # Make specific API requests to generate known log entries
-        time.sleep(2)
+        print(f"Making test API requests for {email}...")
         
         # Try to access a file (this should generate a log entry)
         try:
@@ -234,7 +227,7 @@ class TestAccessLogging:
         except Exception as e:
             print(f"API request failed (expected): {e}")
         
-        time.sleep(3)
+        time.sleep(2)
         
         # Copy logs from server
         print("Copying logs from server container...")
@@ -245,10 +238,10 @@ class TestAccessLogging:
         
         # Parse log file
         log_file = temp_logs_dir / f"{email}.log"
-        assert log_file.exists()
+        assert log_file.exists(), f"Log file not found for {email}"
         
         entries = access_logging_helper.parse_log_file(log_file)
-        assert len(entries) > 0
+        assert len(entries) > 0, "No log entries found"
         
         # Verify log entry structure
         for entry in entries:
@@ -276,9 +269,6 @@ class TestAccessLogging:
             assert isinstance(entry["status_code"], int)
             
             print(f"Verified entry structure: {json.dumps(entry, indent=2)}")
-        
-        # Cleanup
-        subprocess.run(["just", "test-cleanup"], check=False)
 
     def test_access_denied_logging(
         self,
@@ -288,29 +278,12 @@ class TestAccessLogging:
     ):
         """Test that access denied attempts are properly logged with reasons."""
         
-        # Start server
-        print("Starting server...")
-        subprocess.run(["just", "test-server"], check=True)
-        assert wait_for_container_log("syftbox-server", "Server started", timeout=30)
-        time.sleep(2)
+        # Containers are already running
+        print("Checking that server is running...")
+        server_status = get_container_status(docker_client, "syftbox-server")
+        assert server_status["running"], "Server container is not running"
         
-        # Start client1
         email1 = AccessLoggingTestHelper.CLIENT1_EMAIL
-        env_vars1 = {
-            "SYFTBOX_EMAIL": email1,
-            "SYFTBOX_SERVER": AccessLoggingTestHelper.SERVER_URL,
-            "SYFTBOX_SYNC_DIR": "/tmp/test_sync_client1"
-        }
-        
-        print(f"Starting client1 with email {email1}...")
-        subprocess.run(
-            ["just", "test-client-1"],
-            env=dict(os.environ, **env_vars1),
-            check=True
-        )
-        
-        assert wait_for_container_log("syftbox-client1", "Authenticated", timeout=30)
-        time.sleep(2)
         
         # Try to access another user's data (should be denied)
         email2 = AccessLoggingTestHelper.CLIENT2_EMAIL
@@ -325,7 +298,7 @@ class TestAccessLogging:
         except Exception as e:
             print(f"Access attempt failed: {e}")
         
-        time.sleep(3)
+        time.sleep(2)
         
         # Copy logs
         print("Copying logs from server container...")
@@ -336,7 +309,7 @@ class TestAccessLogging:
         
         # Check log file
         log_file = temp_logs_dir / f"{email1}.log"
-        assert log_file.exists()
+        assert log_file.exists(), f"Log file not found for {email1}"
         
         entries = access_logging_helper.parse_log_file(log_file)
         
@@ -354,9 +327,8 @@ class TestAccessLogging:
                 # If there's a denied_reason, it should be non-empty
                 if "denied_reason" in entry:
                     assert len(entry["denied_reason"]) > 0
-        
-        # Cleanup
-        subprocess.run(["just", "test-cleanup"], check=False)
+        else:
+            print("Warning: No denied entries found in this test run")
 
     def test_log_rotation(
         self,
@@ -366,27 +338,12 @@ class TestAccessLogging:
     ):
         """Test that log files are properly rotated when they exceed size limits."""
         
-        # Start server
-        print("Starting server...")
-        subprocess.run(["just", "test-server"], check=True)
-        assert wait_for_container_log("syftbox-server", "Server started", timeout=30)
-        time.sleep(2)
+        # Containers are already running
+        print("Checking that server is running...")
+        server_status = get_container_status(docker_client, "syftbox-server")
+        assert server_status["running"], "Server container is not running"
         
         email = AccessLoggingTestHelper.CLIENT1_EMAIL
-        env_vars = {
-            "SYFTBOX_EMAIL": email,
-            "SYFTBOX_SERVER": AccessLoggingTestHelper.SERVER_URL,
-            "SYFTBOX_SYNC_DIR": "/tmp/test_sync_client1"
-        }
-        
-        print(f"Starting client with email {email}...")
-        subprocess.run(
-            ["just", "test-client-1"],
-            env=dict(os.environ, **env_vars),
-            check=True
-        )
-        
-        assert wait_for_container_log("syftbox-client1", "Authenticated", timeout=30)
         
         # Generate many log entries to potentially trigger rotation
         print("Generating multiple log entries...")
@@ -402,7 +359,7 @@ class TestAccessLogging:
             if i % 20 == 0:
                 time.sleep(0.5)  # Small delay every 20 requests
         
-        time.sleep(3)
+        time.sleep(2)
         
         # Copy logs
         print("Copying logs from server container...")
@@ -417,7 +374,7 @@ class TestAccessLogging:
         
         # At minimum, we should have the main log file
         main_log = temp_logs_dir / f"{email}.log"
-        assert main_log.exists()
+        assert main_log.exists(), f"Main log file not found for {email}"
         
         # Check if rotation occurred (look for .1, .2, etc. files)
         rotated_logs = list(temp_logs_dir.glob(f"{email}.log.*"))
@@ -437,9 +394,6 @@ class TestAccessLogging:
         
         print(f"Total log entries across all files: {total_entries}")
         assert total_entries > 50, "Expected many log entries from our requests"
-        
-        # Cleanup
-        subprocess.run(["just", "test-cleanup"], check=False)
 
 
 if __name__ == "__main__":
