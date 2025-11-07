@@ -17,7 +17,7 @@ import docker
 class AccessLogVerifier:
     """Helper class for verifying access log structure and content."""
     
-    EXPECTED_CLIENTS = ["client1@syftbox.net", "client2@syftbox.net"]
+    EXPECTED_CLIENTS = ["alice@syftbox.net", "bob@syftbox.net"]
     CONTAINER_NAME = "syftbox-server"
     LOG_BASE_PATH = "/root/.logs/access"
     

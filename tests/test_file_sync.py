@@ -9,36 +9,36 @@ from tests.conftest import wait_for_container_log, wait_for_file, get_container_
 class TestFileSync:
     """Test file synchronization between SyftBox clients."""
     
-    CLIENT1_EMAIL = "client1@syftbox.net"
-    CLIENT2_EMAIL = "client2@syftbox.net"
+    CLIENT1_EMAIL = "alice@syftbox.net"
+    CLIENT2_EMAIL = "bob@syftbox.net"
     TEST_FILE_NAME = "test_sync.txt"
-    TEST_FILE_CONTENT = "Hello from client1! This is a test file for synchronization."
+    TEST_FILE_CONTENT = "Hello from Alice! This is a test file for synchronization."
     
     def test_file_sync_between_clients(self, docker_client, clients_dir):
-        """Test that a file written to client1's public folder syncs to client2."""
+        """Test that a file written to Alice's public folder syncs to Bob."""
         
         # Step 1: Verify server is running
         server_status = get_container_status(docker_client, "syftbox-server")
         assert server_status["running"], f"Server is not running. Status: {server_status}"
         print(f"✓ Server is running")
         
-        # Step 2: Wait for client1 to connect
-        client1_container = "syftbox-client-client1-syftbox-net"
+        # Step 2: Wait for Alice to connect
+        alice_container = "syftbox-client-alice-syftbox-net"
         assert wait_for_container_log(
-            client1_container, 
+            alice_container, 
             "socketmgr client connected", 
             timeout=30
-        ), f"Client1 failed to connect. Logs: {get_container_status(docker_client, client1_container)['logs']}"
-        print(f"✓ Client1 ({self.CLIENT1_EMAIL}) connected")
-        
-        # Step 3: Wait for client2 to connect
-        client2_container = "syftbox-client-client2-syftbox-net"
+        ), f"Alice failed to connect. Logs: {get_container_status(docker_client, alice_container)['logs']}"
+        print(f"✓ Alice ({self.CLIENT1_EMAIL}) connected")
+
+        # Step 3: Wait for Bob to connect
+        bob_container = "syftbox-client-bob-syftbox-net"
         assert wait_for_container_log(
-            client2_container, 
+            bob_container, 
             "socketmgr client connected", 
             timeout=30
-        ), f"Client2 failed to connect. Logs: {get_container_status(docker_client, client2_container)['logs']}"
-        print(f"✓ Client2 ({self.CLIENT2_EMAIL}) connected")
+        ), f"Bob failed to connect. Logs: {get_container_status(docker_client, bob_container)['logs']}"
+        print(f"✓ Bob ({self.CLIENT2_EMAIL}) connected")
         
         # Step 4: Give clients time to initialize their directory structures
         time.sleep(5)
@@ -55,19 +55,19 @@ class TestFileSync:
             else:
                 print(f"  {client_email}: Directory not found")
         
-        # Step 5: Write test file to client1's public folder
-        client1_public_dir = clients_dir / self.CLIENT1_EMAIL / "SyftBox" / "datasites" / self.CLIENT1_EMAIL / "public"
-        client1_public_dir.mkdir(parents=True, exist_ok=True)
-        
-        test_file_path = client1_public_dir / self.TEST_FILE_NAME
+        # Step 5: Write test file to Alice's public folder
+        alice_public_dir = clients_dir / self.CLIENT1_EMAIL / "SyftBox" / "datasites" / self.CLIENT1_EMAIL / "public"
+        alice_public_dir.mkdir(parents=True, exist_ok=True)
+
+        test_file_path = alice_public_dir / self.TEST_FILE_NAME
         test_file_path.write_text(self.TEST_FILE_CONTENT)
         print(f"✓ Test file written to: {test_file_path}")
         
-        # Step 6: Wait for file to sync to client2's datasites folder
-        # When client1 publishes to their own public folder:
-        #   client1@syftbox.net/SyftBox/datasites/client1@syftbox.net/public/file.txt
-        # It should sync to client2's view of client1's datasite:
-        #   client2@syftbox.net/SyftBox/datasites/client1@syftbox.net/public/file.txt
+        # Step 6: Wait for file to sync to Bob's datasites folder
+        # When Alice publishes to her own public folder:
+        #   alice@syftbox.net/SyftBox/datasites/alice@syftbox.net/public/file.txt
+        # It should sync to Bob's view of Alice's datasite:
+        #   bob@syftbox.net/SyftBox/datasites/alice@syftbox.net/public/file.txt
         expected_sync_path = (
             clients_dir / self.CLIENT2_EMAIL / "SyftBox" / "datasites" / 
             self.CLIENT1_EMAIL / "public" / self.TEST_FILE_NAME
@@ -85,11 +85,11 @@ class TestFileSync:
             if i % 10 == 0:
                 print(f"   Still waiting... ({i+1}s)")
                 # Also check if the directory structure is being created
-                client2_datasites = clients_dir / self.CLIENT2_EMAIL / "SyftBox" / "datasites"
-                if client2_datasites.exists():
-                    print(f"   Client2 datasites: {list(client2_datasites.iterdir())}")
+                bob_datasites = clients_dir / self.CLIENT2_EMAIL / "SyftBox" / "datasites"
+                if bob_datasites.exists():
+                    print(f"   Bob datasites: {list(bob_datasites.iterdir())}")
                 else:
-                    print(f"   Client2 datasites directory not found")
+                    print(f"   Bob datasites directory not found")
         
         assert synced, f"File did not sync within 60 seconds. Expected at: {expected_sync_path}"
         print(f"✓ File synced successfully!")
@@ -112,25 +112,25 @@ class TestFileSync:
 class TestMultipleFileSync:
     """Test synchronization of multiple files."""
     
-    CLIENT1_EMAIL = "client1@syftbox.net"
-    CLIENT2_EMAIL = "client2@syftbox.net"
+    CLIENT1_EMAIL = "alice@syftbox.net"
+    CLIENT2_EMAIL = "bob@syftbox.net"
     
     def test_multiple_files_sync(self, docker_client, clients_dir):
         """Test that multiple files sync correctly."""
         
         # Wait for both clients to be connected
-        client1_container = "syftbox-client-client1-syftbox-net"
-        client2_container = "syftbox-client-client2-syftbox-net"
+        alice_container = "syftbox-client-alice-syftbox-net"
+        bob_container = "syftbox-client-bob-syftbox-net"
         
-        assert wait_for_container_log(client1_container, "socketmgr client connected", timeout=30)
-        assert wait_for_container_log(client2_container, "socketmgr client connected", timeout=30)
+        assert wait_for_container_log(alice_container, "socketmgr client connected", timeout=30)
+        assert wait_for_container_log(bob_container, "socketmgr client connected", timeout=30)
         
         # Give time for initialization
         time.sleep(5)
         
         # Write multiple files
-        client1_public_dir = clients_dir / self.CLIENT1_EMAIL / "SyftBox" / "datasites" / self.CLIENT1_EMAIL / "public"
-        client1_public_dir.mkdir(parents=True, exist_ok=True)
+        alice_public_dir = clients_dir / self.CLIENT1_EMAIL / "SyftBox" / "datasites" / self.CLIENT1_EMAIL / "public"
+        alice_public_dir.mkdir(parents=True, exist_ok=True)
         
         test_files = {
             "file1.txt": "Content of file 1",
@@ -139,7 +139,7 @@ class TestMultipleFileSync:
         }
         
         for filename, content in test_files.items():
-            file_path = client1_public_dir / filename
+            file_path = alice_public_dir / filename
             file_path.write_text(content)
             print(f"✓ Created {filename}")
         

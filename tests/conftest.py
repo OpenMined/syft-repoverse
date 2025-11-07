@@ -22,7 +22,7 @@ def test_root_dir() -> Path:
 @pytest.fixture(scope="session")
 def clients_dir(test_root_dir: Path) -> Path:
     """Get the clients directory path."""
-    return test_root_dir / "clients"
+    return test_root_dir / "sandbox"
 
 
 def wait_for_container_log(container_name: str, expected_text: str, timeout: int = 60) -> bool:

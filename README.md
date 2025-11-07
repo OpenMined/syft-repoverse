@@ -55,8 +55,8 @@ just test-full
 - `just clean` - Stop services and clean up test data
 - `just status` - Check status of running services
 - `just logs-server` - View server logs
-- `just logs-client1` - View client1 logs
-- `just logs-client2` - View client2 logs
+- `just logs-client1` - View Alice's logs
+- `just logs-client2` - View Bob's logs
 
 ### Test Structure
 
@@ -65,10 +65,12 @@ just test-full
 
 ### Local Development
 
-- Tests mount client data to `./clients/` instead of `~/.syftbox/clients` for isolation
+- Tests mount client data to `./sandbox/` instead of `~/.syftbox/clients` for isolation
 - Uses `docker run` commands directly instead of docker-compose for clients to avoid conflicts
 - Each client runs in its own container with unique names and ports
-- The `./clients/` directory is gitignored for test isolation
+- The `./sandbox/` directory is gitignored for test isolation and is recreated when the test harness starts
+
+Each running SyftBox client bind-mounts its `/root/SyftBox` tree into `./sandbox/{email}/SyftBox`, so you can browse datasites directly on the host. The `just setup` step wipes and recreates the sandbox whenever you spin up the test environment from scratch.
 
 ### CI/CD
 

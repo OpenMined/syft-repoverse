@@ -2,16 +2,26 @@
 
 # Directory paths
 SYFTBOX_DIR := "./syftbox"
-TEST_CLIENTS_DIR := "./clients"
+TEST_CLIENTS_DIR := "./sandbox"
 DOCKER_DIR := SYFTBOX_DIR + "/docker"
 
 # Test configuration
-TEST_CLIENT1_EMAIL := "client1@syftbox.net"
-TEST_CLIENT2_EMAIL := "client2@syftbox.net"
-TEST_CLIENT1_NAME := "client1-syftbox-net"
-TEST_CLIENT2_NAME := "client2-syftbox-net"
+TEST_CLIENT1_EMAIL := "alice@syftbox.net"
+TEST_CLIENT2_EMAIL := "bob@syftbox.net"
+TEST_CLIENT1_NAME := "alice-syftbox-net"
+TEST_CLIENT2_NAME := "bob-syftbox-net"
 TEST_CLIENT1_PORT := "7938"
 TEST_CLIENT2_PORT := "7939"
+
+SYC_CLIENT_ALICE_EMAIL := "alice@syftbox.net"
+SYC_CLIENT_BOB_EMAIL := "bob@syftbox.net"
+SYC_CLIENT_CHARLIE_EMAIL := "charlie@syftbox.net"
+SYC_CLIENT_ALICE_NAME := "alice-syftbox-net"
+SYC_CLIENT_BOB_NAME := "bob-syftbox-net"
+SYC_CLIENT_CHARLIE_NAME := "charlie-syftbox-net"
+SYC_CLIENT_ALICE_PORT := "7940"
+SYC_CLIENT_BOB_PORT := "7941"
+SYC_CLIENT_CHARLIE_PORT := "7942"
 
 # Default target
 default:
@@ -20,6 +30,7 @@ default:
 # Set up test environment
 setup:
     @echo "Setting up test environment..."
+    -rm -rf {{TEST_CLIENTS_DIR}}
     @mkdir -p {{TEST_CLIENTS_DIR}}
     @echo "Test environment ready."
 
@@ -31,16 +42,20 @@ start-server:
     @sleep 5
     @echo "Server started at http://localhost:8080"
 
-# Start client 1
-start-client1:
-    @echo "Starting client 1 ({{TEST_CLIENT1_EMAIL}})..."
-    @echo "Building client image..."
+build-client-image:
+    @echo "Building SyftBox client image..."
     @if [ -n "$${DOCKER_BUILDX:-}" ]; then \
         cd {{SYFTBOX_DIR}} && docker buildx build --cache-from=type=gha --cache-to=type=gha,mode=max -f docker/Dockerfile.client -t syftbox-client --load .; \
     else \
         cd {{SYFTBOX_DIR}} && docker build -f docker/Dockerfile.client -t syftbox-client .; \
     fi
-    @echo "Starting client1 container..."
+
+# Start client 1
+start-client1:
+    @echo "Starting client Alice ({{TEST_CLIENT1_EMAIL}})..."
+    @just build-client-image
+    @echo "Starting Alice container..."
+    @mkdir -p "$(pwd)/{{TEST_CLIENTS_DIR}}/{{TEST_CLIENT1_EMAIL}}/SyftBox"
     docker run -d \
         --name syftbox-client-{{TEST_CLIENT1_NAME}} \
         --network docker_syftbox-network \
@@ -48,13 +63,15 @@ start-client1:
         -e SYFTBOX_SERVER_URL=http://syftbox-server:8080 \
         -e SYFTBOX_AUTH_ENABLED=0 \
         -v "$(pwd)/{{TEST_CLIENTS_DIR}}:/data/clients" \
+        -v "$(pwd)/{{TEST_CLIENTS_DIR}}/{{TEST_CLIENT1_EMAIL}}/SyftBox:/root/SyftBox" \
         syftbox-client {{TEST_CLIENT1_EMAIL}}
-    @echo "Client 1 started at http://localhost:{{TEST_CLIENT1_PORT}}"
+    @echo "Client Alice started at http://localhost:{{TEST_CLIENT1_PORT}}"
 
 # Start client 2
 start-client2:
-    @echo "Starting client 2 ({{TEST_CLIENT2_EMAIL}})..."
-    @echo "Starting client2 container..."
+    @echo "Starting client Bob ({{TEST_CLIENT2_EMAIL}})..."
+    @echo "Starting Bob container..."
+    @mkdir -p "$(pwd)/{{TEST_CLIENTS_DIR}}/{{TEST_CLIENT2_EMAIL}}/SyftBox"
     docker run -d \
         --name syftbox-client-{{TEST_CLIENT2_NAME}} \
         --network docker_syftbox-network \
@@ -62,8 +79,62 @@ start-client2:
         -e SYFTBOX_SERVER_URL=http://syftbox-server:8080 \
         -e SYFTBOX_AUTH_ENABLED=0 \
         -v "$(pwd)/{{TEST_CLIENTS_DIR}}:/data/clients" \
+        -v "$(pwd)/{{TEST_CLIENTS_DIR}}/{{TEST_CLIENT2_EMAIL}}/SyftBox:/root/SyftBox" \
         syftbox-client {{TEST_CLIENT2_EMAIL}}
-    @echo "Client 2 started at http://localhost:{{TEST_CLIENT2_PORT}}"
+    @echo "Client Bob started at http://localhost:{{TEST_CLIENT2_PORT}}"
+
+start-syc-alice:
+    @echo "Starting Syft Crypto client Alice ({{SYC_CLIENT_ALICE_EMAIL}})..."
+    @mkdir -p "$(pwd)/{{TEST_CLIENTS_DIR}}/{{SYC_CLIENT_ALICE_EMAIL}}/SyftBox"
+    docker run -d \
+        --name syftbox-client-{{SYC_CLIENT_ALICE_NAME}} \
+        --network docker_syftbox-network \
+        -p {{SYC_CLIENT_ALICE_PORT}}:7938 \
+        -e SYFTBOX_SERVER_URL=http://syftbox-server:8080 \
+        -e SYFTBOX_AUTH_ENABLED=0 \
+        -v "$(pwd)/{{TEST_CLIENTS_DIR}}:/data/clients" \
+        -v "$(pwd)/{{TEST_CLIENTS_DIR}}/{{SYC_CLIENT_ALICE_EMAIL}}/SyftBox:/root/SyftBox" \
+        syftbox-client {{SYC_CLIENT_ALICE_EMAIL}}
+    @echo "Alice client started at http://localhost:{{SYC_CLIENT_ALICE_PORT}}"
+
+start-syc-bob:
+    @echo "Starting Syft Crypto client Bob ({{SYC_CLIENT_BOB_EMAIL}})..."
+    @mkdir -p "$(pwd)/{{TEST_CLIENTS_DIR}}/{{SYC_CLIENT_BOB_EMAIL}}/SyftBox"
+    docker run -d \
+        --name syftbox-client-{{SYC_CLIENT_BOB_NAME}} \
+        --network docker_syftbox-network \
+        -p {{SYC_CLIENT_BOB_PORT}}:7938 \
+        -e SYFTBOX_SERVER_URL=http://syftbox-server:8080 \
+        -e SYFTBOX_AUTH_ENABLED=0 \
+        -v "$(pwd)/{{TEST_CLIENTS_DIR}}:/data/clients" \
+        -v "$(pwd)/{{TEST_CLIENTS_DIR}}/{{SYC_CLIENT_BOB_EMAIL}}/SyftBox:/root/SyftBox" \
+        syftbox-client {{SYC_CLIENT_BOB_EMAIL}}
+    @echo "Bob client started at http://localhost:{{SYC_CLIENT_BOB_PORT}}"
+
+start-syc-charlie:
+    @echo "Starting Syft Crypto client Charlie ({{SYC_CLIENT_CHARLIE_EMAIL}})..."
+    @mkdir -p "$(pwd)/{{TEST_CLIENTS_DIR}}/{{SYC_CLIENT_CHARLIE_EMAIL}}/SyftBox"
+    docker run -d \
+        --name syftbox-client-{{SYC_CLIENT_CHARLIE_NAME}} \
+        --network docker_syftbox-network \
+        -p {{SYC_CLIENT_CHARLIE_PORT}}:7938 \
+        -e SYFTBOX_SERVER_URL=http://syftbox-server:8080 \
+        -e SYFTBOX_AUTH_ENABLED=0 \
+        -v "$(pwd)/{{TEST_CLIENTS_DIR}}:/data/clients" \
+        -v "$(pwd)/{{TEST_CLIENTS_DIR}}/{{SYC_CLIENT_CHARLIE_EMAIL}}/SyftBox:/root/SyftBox" \
+        syftbox-client {{SYC_CLIENT_CHARLIE_EMAIL}}
+    @echo "Charlie client started at http://localhost:{{SYC_CLIENT_CHARLIE_PORT}}"
+
+start-syc: setup start-server
+    @sleep 3
+    @just build-client-image
+    @sleep 2
+    @just start-syc-alice
+    @sleep 2
+    @just start-syc-bob
+    @sleep 2
+    @just start-syc-charlie
+    @echo "Syft Crypto test environment started!"
 
 # Start all services
 start-all: setup start-server
@@ -78,6 +149,9 @@ stop-all:
     @echo "Stopping all services..."
     -docker stop syftbox-client-{{TEST_CLIENT1_NAME}}
     -docker stop syftbox-client-{{TEST_CLIENT2_NAME}}
+    -docker stop syftbox-client-{{SYC_CLIENT_ALICE_NAME}}
+    -docker stop syftbox-client-{{SYC_CLIENT_BOB_NAME}}
+    -docker stop syftbox-client-{{SYC_CLIENT_CHARLIE_NAME}}
     -cd {{DOCKER_DIR}} && docker compose down
     @echo "All services stopped."
 
@@ -87,8 +161,14 @@ quick-restart:
     # Stop and remove client containers
     -docker stop syftbox-client-{{TEST_CLIENT1_NAME}}
     -docker stop syftbox-client-{{TEST_CLIENT2_NAME}}
+    -docker stop syftbox-client-{{SYC_CLIENT_ALICE_NAME}}
+    -docker stop syftbox-client-{{SYC_CLIENT_BOB_NAME}}
+    -docker stop syftbox-client-{{SYC_CLIENT_CHARLIE_NAME}}
     -docker rm syftbox-client-{{TEST_CLIENT1_NAME}}
     -docker rm syftbox-client-{{TEST_CLIENT2_NAME}}
+    -docker rm syftbox-client-{{SYC_CLIENT_ALICE_NAME}}
+    -docker rm syftbox-client-{{SYC_CLIENT_BOB_NAME}}
+    -docker rm syftbox-client-{{SYC_CLIENT_CHARLIE_NAME}}
     # Remove client data
     -rm -rf {{TEST_CLIENTS_DIR}}
     # Reset MinIO data by recreating the volume
@@ -110,6 +190,9 @@ clean: stop-all
     @echo "Cleaning up..."
     -docker rm syftbox-client-{{TEST_CLIENT1_NAME}}
     -docker rm syftbox-client-{{TEST_CLIENT2_NAME}}
+    -docker rm syftbox-client-{{SYC_CLIENT_ALICE_NAME}}
+    -docker rm syftbox-client-{{SYC_CLIENT_BOB_NAME}}
+    -docker rm syftbox-client-{{SYC_CLIENT_CHARLIE_NAME}}
     -cd {{DOCKER_DIR}} && docker compose down -v
     -rm -rf {{TEST_CLIENTS_DIR}}
     @echo "Cleanup complete."
@@ -126,8 +209,10 @@ fix-permissions:
 # Run the integration tests
 test:
     @echo "Running integration tests..."
-    @echo "Activating virtual environment and running tests..."
-    bash -c "uv run python -m pytest tests/ -v -s"
+    @echo "Activating virtual environment and running core tests..."
+    bash -c "uv run python -m pytest tests/ -m 'not syc' -v -s"
+    @echo "Running Syft Crypto tests..."
+    bash -c "uv run python -m pytest tests/ -m syc -v -s"
 
 # Install test dependencies
 install-deps:
@@ -139,9 +224,26 @@ install-deps:
 test-full: clean start-all
     @echo "Waiting for services to stabilize..."
     @sleep 10
-    @echo "Running tests..."
-    -bash -c "uv run python -m pytest tests/ -v"
+    @echo "Running core integration tests..."
+    -bash -c "uv run python -m pytest tests/ -m 'not syc' -v"
+    @echo "Running Syft Crypto tests..."
+    -bash -c "uv run python -m pytest tests/ -m syc -v"
     @just clean
+
+test-syc flag='': clean start-syc
+    @echo "Waiting for Syft Crypto services to stabilize..."
+    @sleep 15
+    @echo "Building syc CLI..."
+    -rustup toolchain install 1.90.0 >/dev/null
+    -rustup override set 1.90.0 >/dev/null
+    -cargo build --manifest-path syft-crypto-core/cli/Cargo.toml --bin syc --locked
+    @echo "Running Syft Crypto integration tests..."
+    -bash -c "uv run python -m pytest tests/ -m syc -v -s"
+    @if [ "{{flag}}" = "--inspect" ] || [ "{{flag}}" = "inspect" ]; then \
+        echo "Inspect mode enabled: leaving containers and clients running. Run 'just clean' when finished."; \
+    else \
+        just clean; \
+    fi
 
 # Show logs for debugging
 logs-server:
@@ -152,6 +254,15 @@ logs-client1:
 
 logs-client2:
     docker logs syftbox-client-{{TEST_CLIENT2_NAME}} -f
+
+logs-alice:
+    docker logs syftbox-client-{{SYC_CLIENT_ALICE_NAME}} -f
+
+logs-bob:
+    docker logs syftbox-client-{{SYC_CLIENT_BOB_NAME}} -f
+
+logs-charlie:
+    docker logs syftbox-client-{{SYC_CLIENT_CHARLIE_NAME}} -f
 
 # Check service status
 status:
