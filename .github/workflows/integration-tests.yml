@@ -82,8 +82,8 @@ jobs:
       run: |
         just status
         docker logs syftbox-server --tail 50
-        docker logs syftbox-client-client1-syftbox-net --tail 50
-        docker logs syftbox-client-client2-syftbox-net --tail 50
+        docker logs syftbox-client-alice-syftbox-net --tail 50
+        docker logs syftbox-client-bob-syftbox-net --tail 50
 
     - name: Fix permissions
       run: |
@@ -110,9 +110,9 @@ jobs:
         echo "=== Server Logs ==="
         docker logs syftbox-server || true
         echo "=== Client1 Logs ==="
-        docker logs syftbox-client-client1-syftbox-net || true
+        docker logs syftbox-client-alice-syftbox-net || true
         echo "=== Client2 Logs ==="
-        docker logs syftbox-client-client2-syftbox-net || true
+        docker logs syftbox-client-bob-syftbox-net || true
         echo "=== Docker PS ==="
         docker ps -a
         echo "=== Test Client Directories ==="

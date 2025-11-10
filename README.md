@@ -48,7 +48,7 @@ just test-full
 ### Available Commands
 
 - `just setup` - Set up test environment
-- `just start-all` - Start server and both test clients
+- `just start-all` - Start server and the SyftBox test clients (Alice, Bob, Charlie)
 - `just test` - Run tests (requires services to be running)
 - `just test-full` - Run tests with automatic setup and cleanup
 - `just stop-all` - Stop all services

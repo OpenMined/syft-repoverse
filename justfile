@@ -142,6 +142,8 @@ start-all: setup start-server
     @just start-client1
     @sleep 2
     @just start-client2
+    @sleep 2
+    @just start-syc-charlie
     @echo "All services started!"
 
 # Stop all services
