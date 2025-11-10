@@ -53,6 +53,11 @@ jobs:
       run: |
         curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
 
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential pkg-config libssl-dev clang cmake ninja-build protobuf-compiler
+
     - name: Install dependencies
       run: |
         just install-deps

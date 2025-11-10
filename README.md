@@ -32,6 +32,7 @@ This directory contains integration tests for SyftBox that verify end-to-end fun
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/) package manager
 - [just](https://github.com/casey/just) command runner
+- Protocol Buffers compiler (`protoc`). Install via `sudo apt-get install protobuf-compiler` on Ubuntu or `brew install protobuf` on macOS.
 
 ### Quick Start
 
