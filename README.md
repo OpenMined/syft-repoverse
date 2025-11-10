@@ -32,6 +32,7 @@ This directory contains integration tests for SyftBox that verify end-to-end fun
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/) package manager
 - [just](https://github.com/casey/just) command runner
+- Protocol Buffers compiler (`protoc`). Install via `sudo apt-get install protobuf-compiler` on Ubuntu or `brew install protobuf` on macOS.
 
 ### Quick Start
 
@@ -48,15 +49,15 @@ just test-full
 ### Available Commands
 
 - `just setup` - Set up test environment
-- `just start-all` - Start server and both test clients
+- `just start-all` - Start server and the SyftBox test clients (Alice, Bob, Charlie)
 - `just test` - Run tests (requires services to be running)
 - `just test-full` - Run tests with automatic setup and cleanup
 - `just stop-all` - Stop all services
 - `just clean` - Stop services and clean up test data
 - `just status` - Check status of running services
 - `just logs-server` - View server logs
-- `just logs-client1` - View client1 logs
-- `just logs-client2` - View client2 logs
+- `just logs-client1` - View Alice's logs
+- `just logs-client2` - View Bob's logs
 
 ### Test Structure
 
@@ -65,10 +66,12 @@ just test-full
 
 ### Local Development
 
-- Tests mount client data to `./clients/` instead of `~/.syftbox/clients` for isolation
+- Tests mount client data to `./sandbox/` instead of `~/.syftbox/clients` for isolation
 - Uses `docker run` commands directly instead of docker-compose for clients to avoid conflicts
 - Each client runs in its own container with unique names and ports
-- The `./clients/` directory is gitignored for test isolation
+- The `./sandbox/` directory is gitignored for test isolation and is recreated when the test harness starts
+
+Each running SyftBox client bind-mounts its `/root/SyftBox` tree into `./sandbox/{email}/SyftBox`, so you can browse datasites directly on the host. The `just setup` step wipes and recreates the sandbox whenever you spin up the test environment from scratch.
 
 ### CI/CD
 

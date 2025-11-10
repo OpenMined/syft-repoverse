@@ -33,8 +33,8 @@ rules:
 class SubdomainTestHelper:
     """Helper class for subdomain testing utilities."""
 
-    CLIENT1_EMAIL = "client1@syftbox.net"
-    CLIENT2_EMAIL = "client2@syftbox.net"
+    CLIENT1_EMAIL = "alice@syftbox.net"
+    CLIENT2_EMAIL = "bob@syftbox.net"
     TEST_DOMAIN = "syftbox.local"
     SERVER_PORT = "8080"
 
@@ -246,16 +246,16 @@ class TestHashSubdomains:
             # Server may already be running in full test suite
             print("✓ Server already running")
 
-        client1_container = "syftbox-client-client1-syftbox-net"
+        alice_container = "syftbox-client-alice-syftbox-net"
         if not wait_for_container_log(
-            client1_container, "socketmgr client connected", timeout=5
+            alice_container, "socketmgr client connected", timeout=5
         ):
             # If log not found, just check container is running
-            status_info = get_container_status(docker_client, client1_container)
+            status_info = get_container_status(docker_client, alice_container)
             assert status_info["running"], (
-                f"Container {client1_container} not running: {status_info['status']}"
+                f"Container {alice_container} not running: {status_info['status']}"
             )
-            print(f"✓ Container {client1_container} already running")
+            print(f"✓ Container {alice_container} already running")
 
         time.sleep(2)  # Let services stabilize
 
@@ -265,8 +265,8 @@ class TestHashSubdomains:
         helper.create_settings_yaml(clients_dir, helper.CLIENT1_EMAIL, domains_config)
         time.sleep(5)  # Give time for hot reload
 
-        # Create test file in client1's public directory with unique name
-        test_content = "Hello from client1's hash subdomain!"
+        # Create test file in alice's public directory with unique name
+        test_content = "Hello from alice's hash subdomain!"
         test_file = helper.create_test_file(
             clients_dir, helper.CLIENT1_EMAIL, "public/basic-test.html", test_content
         )
@@ -275,7 +275,7 @@ class TestHashSubdomains:
         # Extra wait for file sync in full test suite
         time.sleep(5)
 
-        # Calculate client1's hash subdomain
+        # Calculate alice's hash subdomain
         hash_subdomain = helper.get_hash_subdomain(helper.CLIENT1_EMAIL)
         server_url = f"http://{hash_subdomain}:{helper.SERVER_PORT}/basic-test.html"
 
@@ -284,13 +284,13 @@ class TestHashSubdomains:
 
         # Add domain to container's hosts file (point to server container IP)
         hosts_mapping = {hash_subdomain: "syftbox-server"}
-        assert helper.add_hosts_to_container(client1_container, hosts_mapping)
+        assert helper.add_hosts_to_container(alice_container, hosts_mapping)
         print(f"✓ Added host mapping: {hash_subdomain} -> syftbox-server")
 
         # Make request from inside container with retries for file sync
         response = None
         for attempt in range(5):
-            response = helper.make_container_request(client1_container, server_url)
+            response = helper.make_container_request(alice_container, server_url)
             if (
                 response["success"]
                 and response["status_code"] == 200
@@ -303,7 +303,7 @@ class TestHashSubdomains:
             time.sleep(3)
 
         if not response:
-            response = helper.make_container_request(client1_container, server_url)
+            response = helper.make_container_request(alice_container, server_url)
 
         print(f"📥 Response: {response}")
 
@@ -327,17 +327,17 @@ class TestHashSubdomains:
         helper = SubdomainTestHelper()
 
         # Wait for services
-        client1_container = "syftbox-client-client1-syftbox-net"
+        alice_container = "syftbox-client-alice-syftbox-net"
         # In full test suite, container may already be running
         if not wait_for_container_log(
-            client1_container, "socketmgr client connected", timeout=5
+            alice_container, "socketmgr client connected", timeout=5
         ):
             # If log not found, just check container is running
-            status_info = get_container_status(docker_client, client1_container)
+            status_info = get_container_status(docker_client, alice_container)
             assert status_info["running"], (
-                f"Container {client1_container} not running: {status_info['status']}"
+                f"Container {alice_container} not running: {status_info['status']}"
             )
-            print(f"✓ Container {client1_container} already running")
+            print(f"✓ Container {alice_container} already running")
         time.sleep(2)
 
         # Set up hash subdomain configuration (point to /public)
@@ -361,12 +361,12 @@ class TestHashSubdomains:
         server_url = f"http://{hash_subdomain}:{helper.SERVER_PORT}/test.html"
 
         hosts_mapping = {hash_subdomain: "syftbox-server"}
-        helper.add_hosts_to_container(client1_container, hosts_mapping)
+        helper.add_hosts_to_container(alice_container, hosts_mapping)
 
         # Make request with retries for file sync
         response = None
         for attempt in range(5):
-            response = helper.make_container_request(client1_container, server_url)
+            response = helper.make_container_request(alice_container, server_url)
             if response["success"] and response["status_code"] == 200:
                 break
             print(
@@ -375,7 +375,7 @@ class TestHashSubdomains:
             time.sleep(3)
 
         if not response:
-            response = helper.make_container_request(client1_container, server_url)
+            response = helper.make_container_request(alice_container, server_url)
 
         print(f"📥 Security headers test response: {response}")
 
@@ -407,17 +407,17 @@ class TestHashSubdomains:
         helper = SubdomainTestHelper()
 
         # Setup
-        client1_container = "syftbox-client-client1-syftbox-net"
+        alice_container = "syftbox-client-alice-syftbox-net"
         # In full test suite, container may already be running
         if not wait_for_container_log(
-            client1_container, "socketmgr client connected", timeout=5
+            alice_container, "socketmgr client connected", timeout=5
         ):
             # If log not found, just check container is running
-            status_info = get_container_status(docker_client, client1_container)
+            status_info = get_container_status(docker_client, alice_container)
             assert status_info["running"], (
-                f"Container {client1_container} not running: {status_info['status']}"
+                f"Container {alice_container} not running: {status_info['status']}"
             )
-            print(f"✓ Container {client1_container} already running")
+            print(f"✓ Container {alice_container} already running")
         time.sleep(2)
 
         # Set up hash subdomain configuration (point to /public)
@@ -440,14 +440,14 @@ class TestHashSubdomains:
         # Setup subdomain
         hash_subdomain = helper.get_hash_subdomain(helper.CLIENT1_EMAIL)
         hosts_mapping = {hash_subdomain: "syftbox-server"}
-        helper.add_hosts_to_container(client1_container, hosts_mapping)
+        helper.add_hosts_to_container(alice_container, hosts_mapping)
 
         # Test specific file (this test is about directory listing, but we'll test the file directly)
         server_url = f"http://{hash_subdomain}:{helper.SERVER_PORT}/directory-test.html"
         # Make request with retries for file sync
         response = None
         for attempt in range(5):
-            response = helper.make_container_request(client1_container, server_url)
+            response = helper.make_container_request(alice_container, server_url)
             if (
                 response["success"]
                 and response["status_code"] == 200
@@ -460,7 +460,7 @@ class TestHashSubdomains:
             time.sleep(3)
 
         if not response:
-            response = helper.make_container_request(client1_container, server_url)
+            response = helper.make_container_request(alice_container, server_url)
 
         assert response["success"]
 
@@ -482,9 +482,9 @@ class TestVanityDomains:
         helper = SubdomainTestHelper()
 
         # Setup
-        client1_container = "syftbox-client-client1-syftbox-net"
+        alice_container = "syftbox-client-alice-syftbox-net"
         assert wait_for_container_log(
-            client1_container, "socketmgr client connected", timeout=30
+            alice_container, "socketmgr client connected", timeout=30
         )
         time.sleep(5)
 
@@ -518,7 +518,7 @@ class TestVanityDomains:
         # Setup domain mapping
         actual_hash_subdomain = helper.get_hash_subdomain(helper.CLIENT1_EMAIL)
         hosts_mapping = {actual_hash_subdomain: "syftbox-server"}
-        helper.add_hosts_to_container(client1_container, hosts_mapping)
+        helper.add_hosts_to_container(alice_container, hosts_mapping)
 
         # Test that hash subdomain now points to /blog instead of /public
         server_url = (
@@ -528,7 +528,7 @@ class TestVanityDomains:
         # Try multiple times for file synchronization
         response = None
         for attempt in range(5):
-            response = helper.make_container_request(client1_container, server_url)
+            response = helper.make_container_request(alice_container, server_url)
             if response["success"] and (
                 "Blog Post Content" in response["content"]
                 or response["status_code"] == 200
@@ -540,7 +540,7 @@ class TestVanityDomains:
             )
 
         if not response:
-            response = helper.make_container_request(client1_container, server_url)
+            response = helper.make_container_request(alice_container, server_url)
 
         print(f"📥 Vanity domain response: {response}")
 
@@ -561,9 +561,9 @@ class TestVanityDomains:
         helper = SubdomainTestHelper()
 
         # Setup
-        client1_container = "syftbox-client-client1-syftbox-net"
+        alice_container = "syftbox-client-alice-syftbox-net"
         assert wait_for_container_log(
-            client1_container, "socketmgr client connected", timeout=30
+            alice_container, "socketmgr client connected", timeout=30
         )
         time.sleep(5)
 
@@ -595,10 +595,10 @@ class TestVanityDomains:
 
         for domain, expected in zip(vanity_domains, expected_content):
             hosts_mapping = {domain: "syftbox-server"}
-            helper.add_hosts_to_container(client1_container, hosts_mapping)
+            helper.add_hosts_to_container(alice_container, hosts_mapping)
 
             server_url = f"http://{domain}:{helper.SERVER_PORT}/"
-            response = helper.make_container_request(client1_container, server_url)
+            response = helper.make_container_request(alice_container, server_url)
 
             print(
                 f"📥 Vanity domain {domain} response: Status {response['status_code']}, Content length: {len(response['content'])}"
@@ -628,29 +628,29 @@ class TestSubdomainSecurity:
         helper = SubdomainTestHelper()
 
         # Setup
-        client1_container = "syftbox-client-client1-syftbox-net"
-        client2_container = "syftbox-client-client2-syftbox-net"
+        alice_container = "syftbox-client-alice-syftbox-net"
+        bob_container = "syftbox-client-bob-syftbox-net"
 
         # In full test suite, containers may already be running
         if not wait_for_container_log(
-            client1_container, "socketmgr client connected", timeout=5
+            alice_container, "socketmgr client connected", timeout=5
         ):
             # If log not found, just check container is running
-            status_info = get_container_status(docker_client, client1_container)
+            status_info = get_container_status(docker_client, alice_container)
             assert status_info["running"], (
-                f"Container {client1_container} not running: {status_info['status']}"
+                f"Container {alice_container} not running: {status_info['status']}"
             )
-            print(f"✓ Container {client1_container} already running")
+            print(f"✓ Container {alice_container} already running")
 
         if not wait_for_container_log(
-            client2_container, "socketmgr client connected", timeout=5
+            bob_container, "socketmgr client connected", timeout=5
         ):
             # If log not found, just check container is running
-            status_info = get_container_status(docker_client, client2_container)
+            status_info = get_container_status(docker_client, bob_container)
             assert status_info["running"], (
-                f"Container {client2_container} not running: {status_info['status']}"
+                f"Container {bob_container} not running: {status_info['status']}"
             )
-            print(f"✓ Container {client2_container} already running")
+            print(f"✓ Container {bob_container} already running")
 
         time.sleep(2)
 
@@ -679,10 +679,10 @@ class TestSubdomainSecurity:
         # Extra wait for file sync in full test suite
         time.sleep(5)
 
-        # Test access to public file via client1's hash subdomain
+        # Test access to public file via alice's hash subdomain
         hash_subdomain = helper.get_hash_subdomain(helper.CLIENT1_EMAIL)
         hosts_mapping = {hash_subdomain: "syftbox-server"}
-        helper.add_hosts_to_container(client1_container, hosts_mapping)
+        helper.add_hosts_to_container(alice_container, hosts_mapping)
 
         # Public file should be accessible
         public_url = f"http://{hash_subdomain}:{helper.SERVER_PORT}/public-file.txt"
@@ -690,7 +690,7 @@ class TestSubdomainSecurity:
         # Make request with retries for file sync
         response = None
         for attempt in range(5):
-            response = helper.make_container_request(client1_container, public_url)
+            response = helper.make_container_request(alice_container, public_url)
             if (
                 response["success"]
                 and response["status_code"] == 200
@@ -703,7 +703,7 @@ class TestSubdomainSecurity:
             time.sleep(3)
 
         if not response:
-            response = helper.make_container_request(client1_container, public_url)
+            response = helper.make_container_request(alice_container, public_url)
 
         assert response["success"]
 
@@ -722,18 +722,18 @@ class TestSubdomainSecurity:
         helper = SubdomainTestHelper()
 
         # Setup both clients
-        client1_container = "syftbox-client-client1-syftbox-net"
-        client2_container = "syftbox-client-client2-syftbox-net"
+        alice_container = "syftbox-client-alice-syftbox-net"
+        bob_container = "syftbox-client-bob-syftbox-net"
 
         assert wait_for_container_log(
-            client1_container, "socketmgr client connected", timeout=30
+            alice_container, "socketmgr client connected", timeout=30
         )
         assert wait_for_container_log(
-            client2_container, "socketmgr client connected", timeout=30
+            bob_container, "socketmgr client connected", timeout=30
         )
         time.sleep(5)
 
-        # Create private content for client1
+        # Create private content for alice
         helper.create_test_file(
             clients_dir,
             helper.CLIENT1_EMAIL,
@@ -742,19 +742,19 @@ class TestSubdomainSecurity:
             is_public=False,
         )
 
-        # Try to access client1's private content via client1's subdomain from client2
-        client1_hash_subdomain = helper.get_hash_subdomain(helper.CLIENT1_EMAIL)
-        hosts_mapping = {client1_hash_subdomain: "syftbox-server"}
-        helper.add_hosts_to_container(client2_container, hosts_mapping)
+        # Try to access alice's private content via alice's subdomain from bob
+        alice_hash_subdomain = helper.get_hash_subdomain(helper.CLIENT1_EMAIL)
+        hosts_mapping = {alice_hash_subdomain: "syftbox-server"}
+        helper.add_hosts_to_container(bob_container, hosts_mapping)
 
-        # Configure client1's subdomain to serve private content
+        # Configure alice's subdomain to serve private content
         domains_config = {"{email-hash}": "/private"}
         helper.create_settings_yaml(clients_dir, helper.CLIENT1_EMAIL, domains_config)
         time.sleep(10)
 
         # Request should be blocked (403 or 404)
-        private_url = f"http://{client1_hash_subdomain}:{helper.SERVER_PORT}/secret.txt"
-        response = helper.make_container_request(client2_container, private_url)
+        private_url = f"http://{alice_hash_subdomain}:{helper.SERVER_PORT}/secret.txt"
+        response = helper.make_container_request(bob_container, private_url)
 
         # Should be blocked - expect 403 or 404
         print(f"📥 Cross-user access response: {response}")
@@ -784,9 +784,9 @@ class TestSubdomain404Responses:
         """Test that requesting a non-existent file returns 404."""
         helper = SubdomainTestHelper()
 
-        client1_container = "syftbox-client-client1-syftbox-net"
+        alice_container = "syftbox-client-alice-syftbox-net"
         assert wait_for_container_log(
-            client1_container, "socketmgr client connected", timeout=30
+            alice_container, "socketmgr client connected", timeout=30
         )
         time.sleep(5)
 
@@ -798,13 +798,13 @@ class TestSubdomain404Responses:
         # Setup subdomain but DON'T create any file
         hash_subdomain = helper.get_hash_subdomain(helper.CLIENT1_EMAIL)
         hosts_mapping = {hash_subdomain: "syftbox-server"}
-        helper.add_hosts_to_container(client1_container, hosts_mapping)
+        helper.add_hosts_to_container(alice_container, hosts_mapping)
 
         # Request a file that doesn't exist
         missing_url = (
             f"http://{hash_subdomain}:{helper.SERVER_PORT}/does-not-exist.html"
         )
-        response = helper.make_container_request(client1_container, missing_url)
+        response = helper.make_container_request(alice_container, missing_url)
 
         assert response["success"], f"Request failed: {response.get('error')}"
         assert response["status_code"] == 404, (
@@ -820,9 +820,9 @@ class TestSubdomain404Responses:
         """Test that hash subdomain without settings.yaml configuration returns 404."""
         helper = SubdomainTestHelper()
 
-        client1_container = "syftbox-client-client1-syftbox-net"
+        alice_container = "syftbox-client-alice-syftbox-net"
         assert wait_for_container_log(
-            client1_container, "socketmgr client connected", timeout=30
+            alice_container, "socketmgr client connected", timeout=30
         )
         time.sleep(5)
 
@@ -837,11 +837,11 @@ class TestSubdomain404Responses:
         # Setup subdomain
         hash_subdomain = helper.get_hash_subdomain(helper.CLIENT1_EMAIL)
         hosts_mapping = {hash_subdomain: "syftbox-server"}
-        helper.add_hosts_to_container(client1_container, hosts_mapping)
+        helper.add_hosts_to_container(alice_container, hosts_mapping)
 
         # Try to access the file - should get 404 because no subdomain config
         test_url = f"http://{hash_subdomain}:{helper.SERVER_PORT}/test-no-config.html"
-        response = helper.make_container_request(client1_container, test_url)
+        response = helper.make_container_request(alice_container, test_url)
 
         assert response["success"], f"Request failed: {response.get('error')}"
         assert response["status_code"] == 404, (
@@ -854,24 +854,24 @@ class TestSubdomain404Responses:
         """Test that accessing private files returns 404 or 403."""
         helper = SubdomainTestHelper()
 
-        client1_container = "syftbox-client-client1-syftbox-net"
-        client2_container = "syftbox-client-client2-syftbox-net"
+        alice_container = "syftbox-client-alice-syftbox-net"
+        bob_container = "syftbox-client-bob-syftbox-net"
 
         assert wait_for_container_log(
-            client1_container, "socketmgr client connected", timeout=30
+            alice_container, "socketmgr client connected", timeout=30
         )
         assert wait_for_container_log(
-            client2_container, "socketmgr client connected", timeout=30
+            bob_container, "socketmgr client connected", timeout=30
         )
         time.sleep(5)
 
-        # Configure client1's subdomain to point to root
+        # Configure alice's subdomain to point to root
         domains_config = {"{email-hash}": "/"}
         helper.create_settings_yaml(clients_dir, helper.CLIENT1_EMAIL, domains_config)
         time.sleep(5)
 
         # Create a truly private file (no ACL file)
-        client1_private_dir = (
+        alice_private_dir = (
             clients_dir
             / helper.CLIENT1_EMAIL
             / "SyftBox"
@@ -883,20 +883,20 @@ class TestSubdomain404Responses:
             clients_dir,
             helper.CLIENT1_EMAIL,
             "private_data/secret.txt",
-            "This is client1's private data",
+            "This is alice's private data",
             is_public=False,
         )
 
-        # Setup subdomain for client2 to try accessing client1's data
+        # Setup subdomain for bob to try accessing alice's data
         hash_subdomain = helper.get_hash_subdomain(helper.CLIENT1_EMAIL)
         hosts_mapping = {hash_subdomain: "syftbox-server"}
-        helper.add_hosts_to_container(client2_container, hosts_mapping)
+        helper.add_hosts_to_container(bob_container, hosts_mapping)
 
-        # Client2 tries to access client1's private file
+        # Client2 tries to access alice's private file
         private_url = (
             f"http://{hash_subdomain}:{helper.SERVER_PORT}/private_data/secret.txt"
         )
-        response = helper.make_container_request(client2_container, private_url)
+        response = helper.make_container_request(bob_container, private_url)
 
         assert response["success"], f"Request failed: {response.get('error')}"
         assert response["status_code"] in [403, 404], (
@@ -904,7 +904,7 @@ class TestSubdomain404Responses:
         )
 
         # Make sure the private content is NOT in the response
-        assert "This is client1's private data" not in response["content"], (
+        assert "This is alice's private data" not in response["content"], (
             "Private data should not be accessible!"
         )
 
@@ -921,19 +921,19 @@ class TestSubdomainEdgeCases:
         """Test that unknown subdomains return 500."""
         helper = SubdomainTestHelper()
 
-        client1_container = "syftbox-client-client1-syftbox-net"
+        alice_container = "syftbox-client-alice-syftbox-net"
         assert wait_for_container_log(
-            client1_container, "socketmgr client connected", timeout=30
+            alice_container, "socketmgr client connected", timeout=30
         )
         time.sleep(5)
 
         # Test unknown hash subdomain
         unknown_subdomain = "1234567890abcdef.syftbox.local"
         hosts_mapping = {unknown_subdomain: "syftbox-server"}
-        helper.add_hosts_to_container(client1_container, hosts_mapping)
+        helper.add_hosts_to_container(alice_container, hosts_mapping)
 
         unknown_url = f"http://{unknown_subdomain}:{helper.SERVER_PORT}/"
-        response = helper.make_container_request(client1_container, unknown_url)
+        response = helper.make_container_request(alice_container, unknown_url)
 
         assert response["success"]
 
@@ -952,20 +952,20 @@ class TestSubdomainEdgeCases:
         """Test that API endpoints on subdomains pass through correctly."""
         helper = SubdomainTestHelper()
 
-        client1_container = "syftbox-client-client1-syftbox-net"
+        alice_container = "syftbox-client-alice-syftbox-net"
         assert wait_for_container_log(
-            client1_container, "socketmgr client connected", timeout=30
+            alice_container, "socketmgr client connected", timeout=30
         )
         time.sleep(5)
 
         # Setup hash subdomain
         hash_subdomain = helper.get_hash_subdomain(helper.CLIENT1_EMAIL)
         hosts_mapping = {hash_subdomain: "syftbox-server"}
-        helper.add_hosts_to_container(client1_container, hosts_mapping)
+        helper.add_hosts_to_container(alice_container, hosts_mapping)
 
         # Test API endpoint on subdomain (should not be rewritten)
         api_url = f"http://{hash_subdomain}:{helper.SERVER_PORT}/api/v1/status"
-        response = helper.make_container_request(client1_container, api_url)
+        response = helper.make_container_request(alice_container, api_url)
 
         assert response["success"]
         # API endpoints should either work (200) or be not found (404), but not be rewritten
@@ -984,9 +984,9 @@ class TestSubdomainIntegration:
         """Test the complete flow: file upload → immediate subdomain availability."""
         helper = SubdomainTestHelper()
 
-        client1_container = "syftbox-client-client1-syftbox-net"
+        alice_container = "syftbox-client-alice-syftbox-net"
         assert wait_for_container_log(
-            client1_container, "socketmgr client connected", timeout=30
+            alice_container, "socketmgr client connected", timeout=30
         )
         time.sleep(5)
 
@@ -998,7 +998,7 @@ class TestSubdomainIntegration:
         # Setup subdomain mapping
         hash_subdomain = helper.get_hash_subdomain(helper.CLIENT1_EMAIL)
         hosts_mapping = {hash_subdomain: "syftbox-server"}
-        helper.add_hosts_to_container(client1_container, hosts_mapping)
+        helper.add_hosts_to_container(alice_container, hosts_mapping)
 
         # Step 1: Create a new file
         new_content = f"New file created at {time.time()}"
@@ -1013,7 +1013,7 @@ class TestSubdomainIntegration:
         # Try multiple times with short delays (testing hot reload)
         file_available = False
         for attempt in range(10):
-            response = helper.make_container_request(client1_container, test_url)
+            response = helper.make_container_request(alice_container, test_url)
             # File should be available with 200 status and correct content
             if (
                 response["success"]
@@ -1034,9 +1034,9 @@ class TestSubdomainIntegration:
         """Test that settings.yaml changes are applied immediately."""
         helper = SubdomainTestHelper()
 
-        client1_container = "syftbox-client-client1-syftbox-net"
+        alice_container = "syftbox-client-alice-syftbox-net"
         assert wait_for_container_log(
-            client1_container, "socketmgr client connected", timeout=30
+            alice_container, "socketmgr client connected", timeout=30
         )
         time.sleep(5)
 
@@ -1059,11 +1059,11 @@ class TestSubdomainIntegration:
         # Setup subdomain
         hash_subdomain = helper.get_hash_subdomain(helper.CLIENT1_EMAIL)
         hosts_mapping = {hash_subdomain: "syftbox-server"}
-        helper.add_hosts_to_container(client1_container, hosts_mapping)
+        helper.add_hosts_to_container(alice_container, hosts_mapping)
 
         # Verify initial configuration is working
         test_url = f"http://{hash_subdomain}:{helper.SERVER_PORT}/public-content.txt"
-        response = helper.make_container_request(client1_container, test_url)
+        response = helper.make_container_request(alice_container, test_url)
         assert response["success"] and response["status_code"] == 200, (
             f"Initial config failed: Expected 200, got {response['status_code']}"
         )
@@ -1079,7 +1079,7 @@ class TestSubdomainIntegration:
         time.sleep(15)  # Give time for hot reload
 
         blog_url = f"http://{hash_subdomain}:{helper.SERVER_PORT}/blog-content.txt"
-        blog_response = helper.make_container_request(client1_container, blog_url)
+        blog_response = helper.make_container_request(alice_container, blog_url)
 
         assert blog_response["success"]
 

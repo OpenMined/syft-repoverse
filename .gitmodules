@@ -16,3 +16,7 @@
 [submodule "apps/rds"]
 	path = apps/rds
 	url = https://github.com/OpenMined/rds
+[submodule "syft-crypto-core"]
+	path = syft-crypto-core
+	url = https://github.com/openmined/syft-crypto-core
+	branch = main
